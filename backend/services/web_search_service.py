@@ -1,6 +1,7 @@
 from tavily import TavilyClient
 from config import settings
 from typing import List, Dict
+import asyncio
 
 
 class WebSearchService:
@@ -19,7 +20,9 @@ class WebSearchService:
             }]
         
         try:
-            response = self.client.search(
+            # Run synchronous search in thread pool to prevent blocking
+            response = await asyncio.to_thread(
+                self.client.search,
                 query=query,
                 max_results=max_results,
                 search_depth="basic",

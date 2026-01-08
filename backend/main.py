@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ChatGPT Clone API",
+    title="MyChatGPT API",
     description="A modern ChatGPT-like API with local Ollama models",
     version="1.0.0",
     lifespan=lifespan
@@ -45,7 +45,7 @@ app.include_router(models.router, prefix="/api/models", tags=["Models"])
 async def root():
     """Root endpoint."""
     return {
-        "message": "ChatGPT Clone API",
+        "message": "MyChatGPT API",
         "version": "1.0.0",
         "status": "running"
     }

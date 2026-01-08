@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import Dict, List
+from pydantic import field_validator
+from typing import Dict, List, Union
 
 
 class Settings(BaseSettings):
@@ -12,10 +13,17 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     
     # Tavily API
-    tavily_api_key: str = "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"
+    tavily_api_key: str = ""
     
-    # CORS
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS - can be comma-separated string or list
+    cors_origins: Union[str, List[str]] = "http://localhost:5173,http://localhost:3000"
+    
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(',')]
+        return v
     
     # Context window
     default_context_window: int = 4096

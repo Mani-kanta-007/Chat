@@ -5,7 +5,7 @@ from models import Document, DocumentChunk
 from services.ollama_service import ollama_service
 from config import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_DOCUMENTS
 import os
-import PyPDF2
+from pypdf import PdfReader
 from docx import Document as DocxDocument
 import io
 
@@ -72,44 +72,55 @@ class RAGService:
     ) -> List[str]:
         """Search for relevant document chunks using semantic similarity."""
         
-        # Generate query embedding
-        query_embedding = await ollama_service.generate_embedding(query)
-        
-        if not query_embedding:
+        try:
+            # Generate query embedding
+            query_embedding = await ollama_service.generate_embedding(query)
+            
+            if not query_embedding:
+                print("Warning: Failed to generate embedding for query")
+                return []
+            
+            # Get all documents for this conversation
+            result = await db.execute(
+                select(Document).where(Document.conversation_id == conversation_id)
+            )
+            documents = result.scalars().all()
+            
+            if not documents:
+                print(f"No documents found for conversation {conversation_id}")
+                return []
+            
+            document_ids = [doc.id for doc in documents]
+            print(f"Found {len(documents)} documents for conversation")
+            
+            # Search for similar chunks using pgvector
+            # Using raw SQL for vector similarity search
+            query_sql = text("""
+                SELECT chunk_text, 1 - (embedding <=> CAST(:query_embedding AS vector)) as similarity
+                FROM document_chunks
+                WHERE document_id = ANY(:document_ids)
+                ORDER BY embedding <=> CAST(:query_embedding AS vector)
+                LIMIT :top_k
+            """)
+            
+            result = await db.execute(
+                query_sql,
+                {
+                    "query_embedding": str(query_embedding),  # Convert list to string
+                    "document_ids": document_ids,
+                    "top_k": top_k
+                }
+            )
+            
+            chunks = [row[0] for row in result.fetchall()]
+            print(f"Found {len(chunks)} relevant chunks")
+            return chunks
+            
+        except Exception as e:
+            print(f"Error in search_relevant_chunks: {e}")
+            import traceback
+            traceback.print_exc()
             return []
-        
-        # Query for similar chunks using pgvector
-        # Get all documents for this conversation
-        result = await db.execute(
-            select(Document).where(Document.conversation_id == conversation_id)
-        )
-        documents = result.scalars().all()
-        
-        if not documents:
-            return []
-        
-        document_ids = [doc.id for doc in documents]
-        
-        # Search for similar chunks using cosine similarity
-        query_text = text("""
-            SELECT chunk_text, 1 - (embedding <=> :query_embedding) as similarity
-            FROM document_chunks
-            WHERE document_id = ANY(:document_ids)
-            ORDER BY embedding <=> :query_embedding
-            LIMIT :top_k
-        """)
-        
-        result = await db.execute(
-            query_text,
-            {
-                "query_embedding": query_embedding,
-                "document_ids": document_ids,
-                "top_k": top_k
-            }
-        )
-        
-        chunks = [row[0] for row in result.fetchall()]
-        return chunks
     
     async def get_conversation_documents(
         self,
@@ -164,7 +175,7 @@ class RAGService:
     async def _extract_pdf_text(self, file_content: bytes) -> str:
         """Extract text from PDF."""
         pdf_file = io.BytesIO(file_content)
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        pdf_reader = PdfReader(pdf_file)
         
         text = ""
         for page in pdf_reader.pages:

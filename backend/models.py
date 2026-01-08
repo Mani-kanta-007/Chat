@@ -40,6 +40,9 @@ class Message(Base):
     
     # Relationship
     conversation = relationship("Conversation", back_populates="messages")
+    
+    class Config:
+        protected_namespaces = ()
 
 
 class Document(Base):
