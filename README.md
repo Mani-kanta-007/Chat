@@ -222,9 +222,7 @@ The application automatically manages context windows:
 - Check document upload limits
 - Ensure `nomic-embed-text:v1.5` is installed
 
-## 📝 License
 
-MIT License - feel free to use this project for learning or production!
 
 ## 🙏 Credits
 
