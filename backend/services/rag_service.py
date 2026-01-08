@@ -1,13 +1,14 @@
+import io
+import os
+import re
 from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from models import Document, DocumentChunk
 from services.ollama_service import ollama_service
 from config import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_DOCUMENTS
-import os
 from pypdf import PdfReader
 from docx import Document as DocxDocument
-import io
 
 
 class RAGService:
@@ -160,16 +161,64 @@ class RAGService:
             return True
         return False
     
+
     def _chunk_text(self, text: str) -> List[str]:
-        """Split text into overlapping chunks."""
-        words = text.split()
+        """Split text into semantically meaningful chunks."""
+        # Split by double newline (paragraphs)
+        paragraphs = re.split(r'\n\s*\n', text)
         chunks = []
+        current_chunk = []
+        current_size = 0
         
-        for i in range(0, len(words), CHUNK_SIZE - CHUNK_OVERLAP):
-            chunk = ' '.join(words[i:i + CHUNK_SIZE])
-            if chunk:
-                chunks.append(chunk)
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+                
+            # Estimate size in words
+            para_words = para.split()
+            para_size = len(para_words)
+            
+            # If a single paragraph is too large, split by sentences
+            if para_size > CHUNK_SIZE:
+                # Flush current buffer first
+                if current_chunk:
+                    chunks.append("\n\n".join(current_chunk))
+                    current_chunk = []
+                    current_size = 0
+                
+                # Split large paragraph by sentences (keeping punctuation)
+                sentences = re.split(r'(?<=[.!?])\s+', para)
+                current_sub_chunk = []
+                current_sub_size = 0
+                
+                for sent in sentences:
+                    sent_size = len(sent.split())
+                    if current_sub_size + sent_size > CHUNK_SIZE:
+                        chunks.append(" ".join(current_sub_chunk))
+                        current_sub_chunk = [sent]
+                        current_sub_size = sent_size
+                    else:
+                        current_sub_chunk.append(sent)
+                        current_sub_size += sent_size
+                
+                if current_sub_chunk:
+                    chunks.append(" ".join(current_sub_chunk))
+                    
+            elif current_size + para_size > CHUNK_SIZE:
+                # Flush buffer -> new chunk
+                chunks.append("\n\n".join(current_chunk))
+                current_chunk = [para]
+                current_size = para_size
+            else:
+                # Add to buffer
+                current_chunk.append(para)
+                current_size += para_size
         
+        # Flush remaining buffer
+        if current_chunk:
+            chunks.append("\n\n".join(current_chunk))
+            
         return chunks
     
     async def _extract_pdf_text(self, file_content: bytes) -> str:

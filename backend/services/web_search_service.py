@@ -2,6 +2,7 @@ from tavily import TavilyClient
 from config import settings
 from typing import List, Dict
 import asyncio
+import aiohttp
 
 
 class WebSearchService:
@@ -12,11 +13,26 @@ class WebSearchService:
         if settings.tavily_api_key:
             self.client = TavilyClient(api_key=settings.tavily_api_key)
     
+    async def check_internet_connection(self) -> bool:
+        """Check if internet connection is available."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get('https://www.google.com', timeout=aiohttp.ClientTimeout(total=3)) as response:
+                    return response.status == 200
+        except:
+            return False
+    
     async def search(self, query: str, max_results: int = 5) -> List[Dict]:
         """Perform web search and return results."""
         if not self.client:
             return [{
                 "error": "Tavily API key not configured. Please set TAVILY_API_KEY in .env file."
+            }]
+        
+        # Check internet connectivity first
+        if not await self.check_internet_connection():
+            return [{
+                "error": "Internet is not connected. Please connect to the internet and try again."
             }]
         
         try:

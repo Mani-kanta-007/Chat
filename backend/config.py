@@ -57,6 +57,13 @@ MODEL_CONFIGS: Dict[str, dict] = {
         "recommendation": "Best for Coding",
         "badge_color": "green"
     },
+    "llava:7b": {
+        "name": "LLaVA 7B",
+        "context_window": 4096,
+        "capabilities": ["vision", "general"],
+        "recommendation": "Vision Capable",
+        "badge_color": "orange"
+    },
     "llama2:latest": {
         "name": "Llama 2",
         "context_window": 4096,

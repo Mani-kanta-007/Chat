@@ -11,6 +11,7 @@ from services.web_search_service import web_search_service
 from services.context_manager import context_manager
 from sqlalchemy import select
 import json
+import re
 
 router = APIRouter()
 
@@ -32,7 +33,12 @@ async def chat_stream(
     
     async def generate():
         try:
-            # Save user message
+            # Get conversation context with summarization
+            context_messages, was_summarized = await context_manager.get_context_messages(
+                db, request.conversation_id, request.model
+            )
+            
+            # Save user message to DB (after getting context to avoid duplication)
             user_message = Message(
                 conversation_id=request.conversation_id,
                 role="user",
@@ -41,19 +47,26 @@ async def chat_stream(
             db.add(user_message)
             await db.commit()
             
-            # Get conversation context with summarization
-            context_messages, was_summarized = await context_manager.get_context_messages(
-                db, request.conversation_id, request.model
-            )
+            # Extract images and clean content for processing
+            images = []
+            img_matches = re.finditer(r'!\[.*?\]\(data:image\/.*?;base64,(.*?)\)', request.message)
+            for match in img_matches:
+                images.append(match.group(1))
             
-            # Prepare the current message
-            current_message = {"role": "user", "content": request.message}
+            clean_message = re.sub(r'!\[.*?\]\(data:image\/.*?;base64,.*?\)', '[Image]', request.message)
             
-            # Add RAG context if enabled
+            # Prepare the current message for Ollama
+            current_message = {
+                "role": "user", 
+                "content": clean_message,
+                "images": images if images else None
+            }
+            
+            # Add RAG context if enabled using clean message
             rag_context = ""
             if request.use_rag:
                 relevant_chunks = await rag_service.search_relevant_chunks(
-                    db, request.conversation_id, request.message
+                    db, request.conversation_id, clean_message
                 )
                 if relevant_chunks:
                     rag_context = "### Relevant Documents:\n\n"
@@ -61,17 +74,17 @@ async def chat_stream(
                         rag_context += f"**Document {i}:**\n{chunk}\n\n"
                     rag_context += "---\n\n"
             
-            # Add web search context if enabled
+            # Add web search context if enabled using clean message
             web_context = ""
             if request.use_web_search:
-                search_results = await web_search_service.search(request.message)
+                search_results = await web_search_service.search(clean_message)
                 web_context = web_search_service.format_search_context(search_results)
             
             # Combine contexts
             enhanced_message = ""
             if rag_context or web_context:
-                enhanced_message = f"{web_context}{rag_context}User Query: {request.message}"
-                current_message = {"role": "user", "content": enhanced_message}
+                enhanced_message = f"{web_context}{rag_context}User Query: {clean_message}"
+                current_message["content"] = enhanced_message
             
             # Build final message list
             messages = context_messages + [current_message]
@@ -134,6 +147,11 @@ async def chat_message(
     """Non-streaming chat endpoint (alternative)."""
     
     try:
+        # Get conversation context
+        context_messages, was_summarized = await context_manager.get_context_messages(
+            db, request.conversation_id, request.model
+        )
+        
         # Save user message
         user_message = Message(
             conversation_id=request.conversation_id,
@@ -143,13 +161,23 @@ async def chat_message(
         db.add(user_message)
         await db.commit()
         
-        # Get conversation context
-        context_messages, was_summarized = await context_manager.get_context_messages(
-            db, request.conversation_id, request.model
-        )
+        # Extract images and clean content for processing
+        images = []
+        img_matches = re.finditer(r'!\[.*?\]\(data:image\/.*?;base64,(.*?)\)', request.message)
+        for match in img_matches:
+            images.append(match.group(1))
+        
+        clean_message = re.sub(r'!\[.*?\]\(data:image\/.*?;base64,.*?\)', '[Image]', request.message)
+        
+        # Prepare the current message
+        current_message = {
+            "role": "user", 
+            "content": clean_message,
+            "images": images if images else None
+        }
         
         # Add current message
-        messages = context_messages + [{"role": "user", "content": request.message}]
+        messages = context_messages + [current_message]
         
         # Get response
         response = await ollama_service.chat(request.model, messages)

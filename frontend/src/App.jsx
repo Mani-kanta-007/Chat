@@ -10,10 +10,18 @@ function App() {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('llama3.2:latest');
   const [loading, setLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved === 'true';
+  });
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+  }, [sidebarCollapsed]);
 
   const loadInitialData = async () => {
     try {
@@ -57,6 +65,10 @@ function App() {
     loadInitialData();
   };
 
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   if (loading) {
     return (
       <div className="loading-screen">
@@ -74,6 +86,9 @@ function App() {
         onNewChat={handleNewChat}
         onSelectConversation={handleSelectConversation}
         onDeleteConversation={handleDeleteConversation}
+        isCollapsed={sidebarCollapsed}
+        onToggle={handleToggleSidebar}
+        onUpdateConversations={handleUpdateConversations}
       />
       <ChatArea
         conversation={currentConversation}

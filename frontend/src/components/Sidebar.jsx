@@ -1,8 +1,12 @@
-import { MessageSquarePlus, Trash2, MessageSquare } from 'lucide-react';
-import { deleteConversation } from '../services/api';
+import { useState } from 'react';
+import { MessageSquarePlus, Trash2, MessageSquare, Menu, X, Edit2, Check } from 'lucide-react';
+import { deleteConversation, updateConversation } from '../services/api';
 import './Sidebar.css';
 
-function Sidebar({ conversations, currentConversation, onNewChat, onSelectConversation, onDeleteConversation }) {
+function Sidebar({ conversations, currentConversation, onNewChat, onSelectConversation, onDeleteConversation, isCollapsed, onToggle, onUpdateConversations }) {
+    const [editingId, setEditingId] = useState(null);
+    const [editTitle, setEditTitle] = useState('');
+
     const handleDelete = async (e, conversationId) => {
         e.stopPropagation();
         if (window.confirm('Are you sure you want to delete this conversation?')) {
@@ -12,6 +16,36 @@ function Sidebar({ conversations, currentConversation, onNewChat, onSelectConver
             } catch (error) {
                 console.error('Error deleting conversation:', error);
             }
+        }
+    };
+
+    const handleEditStart = (e, conv) => {
+        e.stopPropagation();
+        setEditingId(conv.id);
+        setEditTitle(conv.title);
+    };
+
+    const handleEditSave = async (e, id) => {
+        e.stopPropagation();
+        if (editTitle.trim()) {
+            try {
+                await updateConversation(id, editTitle);
+                onUpdateConversations();
+            } catch (error) {
+                console.error('Error updating conversation:', error);
+            }
+        }
+        setEditingId(null);
+    };
+
+    const handleEditKeyDown = (e, id) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleEditSave(e, id);
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setEditingId(null);
         }
     };
 
@@ -32,14 +66,25 @@ function Sidebar({ conversations, currentConversation, onNewChat, onSelectConver
     };
 
     return (
-        <div className="sidebar glass">
+        <div className={`sidebar glass ${isCollapsed ? 'collapsed' : ''}`}>
+            {/* Header ... */}
             <div className="sidebar-header">
-                <h1 className="sidebar-title gradient-text">MyChatGPT</h1>
+                {!isCollapsed && <h1 className="sidebar-title gradient-text">MyChatGPT</h1>}
+                <button
+                    className="sidebar-toggle-btn btn-ghost"
+                    onClick={onToggle}
+                    title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                    {isCollapsed ? <Menu size={20} /> : <X size={20} />}
+                </button>
+            </div>
+
+            {!isCollapsed && (
                 <button className="btn btn-primary new-chat-btn" onClick={onNewChat}>
                     <MessageSquarePlus size={18} />
                     New Chat
                 </button>
-            </div>
+            )}
 
             <div className="conversations-list">
                 {conversations.length === 0 ? (
@@ -57,16 +102,49 @@ function Sidebar({ conversations, currentConversation, onNewChat, onSelectConver
                             onClick={() => onSelectConversation(conv)}
                         >
                             <div className="conversation-content">
-                                <div className="conversation-title">{conv.title}</div>
+                                {editingId === conv.id ? (
+                                    <input
+                                        type="text"
+                                        className="sidebar-edit-input"
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => handleEditKeyDown(e, conv.id)}
+                                        onBlur={(e) => handleEditSave(e, conv.id)}
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <div className="conversation-title">{conv.title}</div>
+                                )}
                                 <div className="conversation-date">{formatDate(conv.updated_at)}</div>
                             </div>
-                            <button
-                                className="delete-btn btn-ghost"
-                                onClick={(e) => handleDelete(e, conv.id)}
-                                title="Delete conversation"
-                            >
-                                <Trash2 size={16} />
-                            </button>
+
+                            {editingId === conv.id ? (
+                                <button
+                                    className="action-btn save-btn btn-ghost"
+                                    onClick={(e) => handleEditSave(e, conv.id)}
+                                    title="Save title"
+                                >
+                                    <Check size={16} className="text-green" />
+                                </button>
+                            ) : (
+                                <div className="conversation-actions">
+                                    <button
+                                        className="action-btn edit-btn btn-ghost"
+                                        onClick={(e) => handleEditStart(e, conv)}
+                                        title="Rename conversation"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
+                                    <button
+                                        className="action-btn delete-btn btn-ghost"
+                                        onClick={(e) => handleDelete(e, conv.id)}
+                                        title="Delete conversation"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))
                 )}

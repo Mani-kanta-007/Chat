@@ -25,6 +25,11 @@ export const getConversation = async (conversationId) => {
     return response.data;
 };
 
+export const autoNameConversation = async (conversationId) => {
+    const response = await api.post(`/conversations/${conversationId}/auto_name`);
+    return response.data;
+};
+
 export const updateConversation = async (conversationId, title) => {
     const response = await api.patch(`/conversations/${conversationId}`, { title });
     return response.data;
@@ -37,9 +42,7 @@ export const deleteConversation = async (conversationId) => {
 
 // Chat
 export const streamChat = (conversationId, message, model, useRag, useWebSearch, onChunk, onError, onComplete) => {
-    const eventSource = new EventSource(
-        `${API_BASE_URL}/chat/stream?conversation_id=${conversationId}&message=${encodeURIComponent(message)}&model=${model}&use_rag=${useRag}&use_web_search=${useWebSearch}`,
-    );
+
 
     // Note: We'll use POST request with fetch for streaming instead
     fetch(`${API_BASE_URL}/chat/stream`, {

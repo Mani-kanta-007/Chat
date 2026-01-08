@@ -3,7 +3,7 @@ import { Upload, FileText, X, Loader } from 'lucide-react';
 import { uploadDocument, getDocuments, deleteDocument } from '../services/api';
 import './FileUpload.css';
 
-function FileUpload({ conversationId }) {
+function FileUpload({ conversationId, compact }) {
     const [documents, setDocuments] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
@@ -57,18 +57,22 @@ function FileUpload({ conversationId }) {
     };
 
     return (
-        <div className="file-upload">
+        <div className={`file-upload ${compact ? 'compact' : ''}`}>
             <button
                 type="button"
-                className="upload-toggle-btn btn-secondary"
+                className={`upload-toggle-btn ${compact ? 'btn-ghost' : 'btn-secondary'}`}
                 onClick={() => {
                     setShowUpload(!showUpload);
                     if (!showUpload) loadDocuments();
                 }}
+                title="Manage documents"
             >
-                <Upload size={18} />
-                {documents.length > 0 && (
+                <Upload size={20} />
+                {!compact && documents.length > 0 && (
                     <span className="upload-count badge badge-blue">{documents.length}</span>
+                )}
+                {compact && documents.length > 0 && (
+                    <span className="upload-dot"></span>
                 )}
             </button>
 

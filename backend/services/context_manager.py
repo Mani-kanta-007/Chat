@@ -1,4 +1,5 @@
 from typing import List, Dict, Tuple
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from models import Message, ConversationSummary
@@ -8,6 +9,12 @@ from config import settings, MODEL_CONFIGS, SUMMARY_TRIGGER_PERCENTAGE, SUMMARY_
 
 class ContextManager:
     """Manage conversation context with intelligent summarization."""
+    
+    def _strip_images(self, content: str) -> str:
+        """Remove base64 images from content to save tokens."""
+        if not content:
+            return ""
+        return re.sub(r'!\[.*?\]\(data:image\/.*?;base64,.*?\)', '[Image]', content)
     
     async def get_context_messages(
         self,
@@ -34,9 +41,9 @@ class ContextManager:
         if not messages:
             return [], False
         
-        # Convert to dict format
+        # Convert to dict format and strip images to save tokens
         message_dicts = [
-            {"role": msg.role, "content": msg.content}
+            {"role": msg.role, "content": self._strip_images(msg.content)}
             for msg in messages
         ]
         
